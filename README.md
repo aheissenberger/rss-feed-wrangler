@@ -238,6 +238,19 @@ The Lambda function is configured with:
 | 500 | Failed to fetch feed | Network error or HTTP error from feed source |
 | 500 | Failed to process feed | XML parsing error or other processing issue |
 
+## Viewing Logs (AWS CLI)
+
+```bash
+# Get function name from the stack
+FUNCTION_NAME=$(aws cloudformation list-stack-resources \
+  --stack-name RssFeedWranglerStack \
+  --query "StackResourceSummaries[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" \
+  --output text)
+aws logs tail "/aws/lambda/${FUNCTION_NAME}" \
+  --since 1h \
+  --follow
+```
+
 ## Stack Outputs
 
 After deployment, the following values are exported:
