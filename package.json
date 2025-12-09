@@ -13,7 +13,7 @@
     "local": "node --experimental-strip-types src/cli/local-handler.ts",
     "generate-hash": "API_URL=$(aws cloudformation describe-stacks --stack-name RssFeedWranglerStack --query 'Stacks[0].Outputs[?OutputKey==`FeedEndpoint`].OutputValue' --output text 2>/dev/null || echo '') node --env-file-if-exists=.env.local --experimental-strip-types src/cli/generate-hash.ts",
     "cdk": "cdk",
-    "deploy": "npm run build && cdk deploy",
+    "deploy": "npm run build && CDK_DOCKER=0 cdk deploy",
     "synth": "cdk synth",
     "diff": "cdk diff",
     "destroy": "cdk destroy"
@@ -29,6 +29,7 @@
     "@types/node": "^24.10.2",
     "@types/xml2js": "^0.4.14",
     "aws-cdk": "^2.1033.0",
+    "esbuild": "^0.27.1",
     "typescript": "^5.9.3"
   },
   "engines": {

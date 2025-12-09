@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
-import { RssFeedWranglerStack } from "../src/stacks/rss-feed-stack";
+import { RssFeedWranglerStack } from "../src/stacks/rss-feed-stack.ts";
 
 const app = new cdk.App();
 
