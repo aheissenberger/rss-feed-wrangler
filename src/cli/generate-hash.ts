@@ -28,4 +28,9 @@ try {
 }
 
 const queryString = generateQueryString(feedUrl, secret);
-console.log(`?${queryString}`);
+
+if (process.env.API_URL) {
+  console.log(`${process.env.API_URL}?${queryString}`);
+} else {
+  console.log(`?${queryString}`);
+}

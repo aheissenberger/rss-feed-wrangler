@@ -11,7 +11,7 @@
     "test:watch": "node --watch --experimental-strip-types --test --test-reporter=spec src/**/*.test.ts",
     "test:coverage": "node --experimental-strip-types --test --test-reporter=lcov src/**/*.test.ts > coverage.lcov",
     "local": "node --experimental-strip-types src/cli/local-handler.ts",
-    "generate-hash": "node --experimental-strip-types src/cli/generate-hash.ts",
+    "generate-hash": "API_URL=$(aws cloudformation describe-stacks --stack-name RssFeedWranglerStack --query 'Stacks[0].Outputs[?OutputKey==`FeedEndpoint`].OutputValue' --output text 2>/dev/null || echo '') node --env-file-if-exists=.env.local --experimental-strip-types src/cli/generate-hash.ts",
     "cdk": "cdk",
     "deploy": "npm run build && cdk deploy",
     "synth": "cdk synth",
