@@ -1,0 +1,12 @@
+node_modules/
+dist/
+lib/
+.aws-cdk-cache/
+cdk.out/
+*.js
+*.js.map
+*.d.ts
+.DS_Store
+.env
+.env.local
+*.log

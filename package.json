@@ -1,0 +1,36 @@
+{
+  "name": "rss-feed-wrangler",
+  "version": "0.1.0",
+  "description": "AWS Lambda function to process Atom feeds and split descriptions",
+  "type": "module",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --experimental-strip-types --test --test-reporter=spec src/**/*.test.ts",
+    "test:watch": "node --watch --experimental-strip-types --test --test-reporter=spec src/**/*.test.ts",
+    "test:coverage": "node --experimental-strip-types --test --test-reporter=lcov src/**/*.test.ts > coverage.lcov",
+    "local": "node --experimental-strip-types src/cli/local-handler.ts",
+    "cdk": "cdk",
+    "deploy": "npm run build && cdk deploy",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.232.1",
+    "aws-lambda": "^1.0.7",
+    "constructs": "^10.4.3",
+    "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.159",
+    "@types/node": "^24.10.2",
+    "@types/xml2js": "^0.4.14",
+    "aws-cdk": "^2.1033.0",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}
