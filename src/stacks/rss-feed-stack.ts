@@ -21,8 +21,9 @@ export class RssFeedWranglerStack extends cdk.Stack {
         entry: join(__dirname, "../handlers/feed-handler.ts"),
         handler: "handler",
         runtime: lambdaRuntime.Runtime.NODEJS_24_X,
-        timeout: cdk.Duration.seconds(30),
-        memorySize: 512,
+        architecture: lambdaRuntime.Architecture.ARM_64,
+        timeout: cdk.Duration.seconds(15),
+        memorySize: 256,
         environment: {
           NODE_OPTIONS: "--enable-source-maps",
           FEED_SECRET: process.env.FEED_SECRET || "change-me-in-production",
