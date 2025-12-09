@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 import { handler } from "../handlers/feed-handler.ts";
+import { generateHash } from "../utils/auth.ts";
 
 function parseFeedUrl(argv: string[]): string | undefined {
   let feedUrl: string | undefined;
@@ -27,16 +28,20 @@ if (!feedUrl) {
   process.exit(1);
 }
 
+// Generate hash for authentication (use local test secret if not set)
+const secret = process.env.FEED_SECRET || "local-test-secret";
+const hash = generateHash(feedUrl, secret);
+
 const event: APIGatewayProxyEventV2 = {
   version: "2.0",
   routeKey: "GET /feed",
   rawPath: "/feed",
-  rawQueryString: `feedUrl=${encodeURIComponent(feedUrl)}`,
+  rawQueryString: `feedUrl=${encodeURIComponent(feedUrl)}&hash=${encodeURIComponent(hash)}`,
   headers: {
     host: "localhost",
     "user-agent": "cli",
   },
-  queryStringParameters: { feedUrl },
+  queryStringParameters: { feedUrl, hash },
   requestContext: {
     http: {
       method: "GET",
@@ -61,13 +66,15 @@ const event: APIGatewayProxyEventV2 = {
 try {
   const response = await handler(event);
 
-  if (response.statusCode && response.statusCode >= 400) {
-    console.error(`Error ${response.statusCode}:`, response.body);
+  const responseValue = typeof response === "string" ? JSON.parse(response) : response;
+
+  if (responseValue.statusCode && responseValue.statusCode >= 400) {
+    console.error(`Error ${responseValue.statusCode}:`, responseValue.body);
     process.exit(1);
   }
 
-  if (response.body) {
-    console.log(response.body);
+  if (responseValue.body) {
+    console.log(responseValue.body);
   }
 } catch (error) {
   console.error("Handler threw:", error);

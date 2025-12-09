@@ -3,7 +3,11 @@ import * as lambda from "aws-cdk-lib/aws-lambda-nodejs";
 import * as lambdaRuntime from "aws-cdk-lib/aws-lambda";
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import { Construct } from "constructs";
-import { join } from "path";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export class RssFeedWranglerStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -21,14 +25,14 @@ export class RssFeedWranglerStack extends cdk.Stack {
         memorySize: 512,
         environment: {
           NODE_OPTIONS: "--enable-source-maps",
+          FEED_SECRET: process.env.FEED_SECRET || "change-me-in-production",
         },
         bundling: {
-          target: "es2022",
+          target: "node24",
           minify: true,
           sourceMap: true,
-          esbuildArgs: {
-            "--external:@aws-sdk": "",
-          },
+          nodeModules: ["xml2js"],
+          externalModules: ["@aws-sdk"],
         },
       }
     );

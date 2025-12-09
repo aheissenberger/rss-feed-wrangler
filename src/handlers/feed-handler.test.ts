@@ -1,10 +1,12 @@
 import { test } from "node:test";
 import { strict as assert } from "node:assert";
 import { handler } from "./feed-handler.ts";
+import { generateHash } from "../utils/auth.ts";
 import type { APIGatewayProxyEventV2 } from "aws-lambda";
 
 // Mock fetch for fast tests
 const originalFetch = global.fetch;
+const testSecret = "test-secret-key";
 
 interface MockFetchOptions {
   ok?: boolean;
@@ -31,15 +33,31 @@ const mockFetch = (url: string, options?: MockFetchOptions) => {
   });
 };
 
-// Helper to create mock API Gateway event
-const createMockEvent = (feedUrl?: string): APIGatewayProxyEventV2 => {
-  const queryStringParameters = feedUrl ? { feedUrl } : undefined;
+// Helper to create mock API Gateway event with auth
+const createMockEvent = (
+  feedUrl?: string,
+  hash?: string
+): APIGatewayProxyEventV2 => {
+  const queryParams: Record<string, string> = {};
+  let rawQueryString = "";
+
+  if (feedUrl) {
+    queryParams.feedUrl = feedUrl;
+    rawQueryString = `feedUrl=${encodeURIComponent(feedUrl)}`;
+  }
+
+  if (hash) {
+    queryParams.hash = hash;
+    rawQueryString += (rawQueryString ? "&" : "") + `hash=${encodeURIComponent(hash)}`;
+  }
+
+  const queryStringParameters = Object.keys(queryParams).length > 0 ? queryParams : undefined;
 
   return {
     version: "2.0",
     routeKey: "GET /feed",
     rawPath: "/feed",
-    rawQueryString: feedUrl ? `feedUrl=${encodeURIComponent(feedUrl)}` : "",
+    rawQueryString,
     headers: {
       host: "example.com",
       "user-agent": "test-client",
@@ -87,7 +105,9 @@ test("Lambda Handler - Parameter validation", async (t) => {
   await t.test(
     "should return 400 when feedUrl is not a valid URL",
     async () => {
-      const event = createMockEvent("not-a-valid-url");
+      const feedUrl = "not-a-valid-url";
+      const hash = generateHash(feedUrl, testSecret);
+      const event = createMockEvent(feedUrl, hash);
       const response = await handler(event);
 
       const responseValue = typeof response === "string" ? JSON.parse(response) : response;
@@ -98,26 +118,89 @@ test("Lambda Handler - Parameter validation", async (t) => {
     }
   );
 
-  await t.test("should accept valid HTTP URLs", async () => {
-    global.fetch = mockFetch as any;
+  await t.test("should return 400 when hash parameter is missing", async () => {
     const event = createMockEvent("http://example.com/feed.xml");
     const response = await handler(event);
+
+    const responseValue = typeof response === "string" ? JSON.parse(response) : response;
+    assert.equal(responseValue.statusCode, 400);
+
+    const body = JSON.parse(responseValue.body as string);
+    assert.ok(body.error.includes("hash"));
+  });
+
+  await t.test("should accept valid HTTP URLs with correct hash", async () => {
+    global.fetch = mockFetch as any;
+    process.env.FEED_SECRET = testSecret;
+    const feedUrl = "http://example.com/feed.xml";
+    const hash = generateHash(feedUrl, testSecret);
+    const event = createMockEvent(feedUrl, hash);
+    const response = await handler(event);
     global.fetch = originalFetch;
+    delete process.env.FEED_SECRET;
 
     const responseValue = typeof response === "string" ? JSON.parse(response) : response;
     // Should not be a 400 parameter validation error
     assert.notEqual(responseValue.statusCode, 400);
   });
 
-  await t.test("should accept valid HTTPS URLs", async () => {
+  await t.test("should accept valid HTTPS URLs with correct hash", async () => {
     global.fetch = mockFetch as any;
-    const event = createMockEvent("https://example.com/feed.xml");
+    process.env.FEED_SECRET = testSecret;
+    const feedUrl = "https://example.com/feed.xml";
+    const hash = generateHash(feedUrl, testSecret);
+    const event = createMockEvent(feedUrl, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
+    delete process.env.FEED_SECRET;
 
     const responseValue = typeof response === "string" ? JSON.parse(response) : response;
     // Should not be a 400 parameter validation error
     assert.notEqual(responseValue.statusCode, 400);
+  });
+});
+
+test("Lambda Handler - Hash validation", async (t) => {
+  await t.test("should return 403 for invalid hash", async () => {
+    process.env.FEED_SECRET = testSecret;
+    const feedUrl = "https://example.com/feed.xml";
+    const wrongHash = "0000000000000000";
+    const event = createMockEvent(feedUrl, wrongHash);
+    const response = await handler(event);
+    delete process.env.FEED_SECRET;
+
+    const responseValue = typeof response === "string" ? JSON.parse(response) : response;
+    assert.equal(responseValue.statusCode, 403);
+
+    const body = JSON.parse(responseValue.body as string);
+    assert.ok(body.error.includes("Invalid hash"));
+  });
+
+  await t.test("should return 403 when hash does not match URL", async () => {
+    process.env.FEED_SECRET = testSecret;
+    const feedUrl1 = "https://example1.com/feed.xml";
+    const feedUrl2 = "https://example2.com/feed.xml";
+    const hash = generateHash(feedUrl1, testSecret);
+    const event = createMockEvent(feedUrl2, hash);
+    const response = await handler(event);
+    delete process.env.FEED_SECRET;
+
+    const responseValue = typeof response === "string" ? JSON.parse(response) : response;
+    assert.equal(responseValue.statusCode, 403);
+  });
+
+  await t.test("should allow missing secret (backward compatibility)", async () => {
+    global.fetch = mockFetch as any;
+    delete process.env.FEED_SECRET;
+    const feedUrl = "https://example.com/feed.xml";
+    const hash = generateHash(feedUrl, "any-secret");
+    const event = createMockEvent(feedUrl, hash);
+    const response = await handler(event);
+    global.fetch = originalFetch;
+
+    const responseValue = typeof response === "string" ? JSON.parse(response) : response;
+    // Should succeed even without secret configured (validation skipped)
+    assert.notEqual(responseValue.statusCode, 403);
   });
 });
 
@@ -139,9 +222,9 @@ test("Lambda Handler - Response headers", async (t) => {
   await t.test("should handle network errors gracefully", async () => {
     global.fetch = ((url: string) =>
       Promise.reject(new Error("Network error"))) as any;
-    const event = createMockEvent(
-      "http://this-domain-does-not-exist-12345.invalid/feed.xml"
-    );
+    const feedUrl = "http://this-domain-does-not-exist-12345.invalid/feed.xml";
+    const hash = generateHash(feedUrl, testSecret);
+    const event = createMockEvent(feedUrl, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
 
@@ -158,9 +241,9 @@ test("Lambda Handler - Error handling", async (t) => {
   await t.test("should return 500 for network errors", async () => {
     global.fetch = ((url: string) =>
       Promise.reject(new Error("Network error"))) as any;
-    const event = createMockEvent(
-      "http://invalid-url-that-will-fail.test/feed.xml"
-    );
+    const feedUrl = "http://invalid-url-that-will-fail.test/feed.xml";
+    const hash = generateHash(feedUrl, testSecret);
+    const event = createMockEvent(feedUrl, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
 
@@ -175,7 +258,9 @@ test("Lambda Handler - Error handling", async (t) => {
   await t.test("should include error details in response", async () => {
     global.fetch = ((url: string) =>
       Promise.reject(new Error("Connection refused"))) as any;
-    const event = createMockEvent("http://localhost:0/feed.xml");
+    const feedUrl = "http://localhost:0/feed.xml";
+    const hash = generateHash(feedUrl, testSecret);
+    const event = createMockEvent(feedUrl, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
 
@@ -209,10 +294,13 @@ test("Lambda Handler - Successful feed processing mock", async (t) => {
 test("Lambda Handler - Parameter edge cases", async (t) => {
   await t.test("should handle URL with query parameters", async () => {
     global.fetch = mockFetch as any;
+    process.env.FEED_SECRET = testSecret;
     const url = "https://example.com/feed.xml?category=tech&format=atom";
-    const event = createMockEvent(url);
+    const hash = generateHash(url, testSecret);
+    const event = createMockEvent(url, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
+    delete process.env.FEED_SECRET;
 
     const responseValue = typeof response === "string" ? JSON.parse(response) : response;
     // Should validate as proper URL (not return 400)
@@ -221,10 +309,13 @@ test("Lambda Handler - Parameter edge cases", async (t) => {
 
   await t.test("should handle URL with fragment identifier", async () => {
     global.fetch = mockFetch as any;
+    process.env.FEED_SECRET = testSecret;
     const url = "https://example.com/feed.xml#section1";
-    const event = createMockEvent(url);
+    const hash = generateHash(url, testSecret);
+    const event = createMockEvent(url, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
+    delete process.env.FEED_SECRET;
 
     const responseValue = typeof response === "string" ? JSON.parse(response) : response;
     // Should validate as proper URL
@@ -234,10 +325,13 @@ test("Lambda Handler - Parameter edge cases", async (t) => {
   await t.test("should handle URL with authentication", async () => {
     global.fetch = ((url: string) =>
       Promise.reject(new Error("Credentials not allowed"))) as any;
+    process.env.FEED_SECRET = testSecret;
     const url = "https://user:pass@example.com/feed.xml";
-    const event = createMockEvent(url);
+    const hash = generateHash(url, testSecret);
+    const event = createMockEvent(url, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
+    delete process.env.FEED_SECRET;
 
     const responseValue = typeof response === "string" ? JSON.parse(response) : response;
     // URL validation should pass, fetch may fail
@@ -246,10 +340,13 @@ test("Lambda Handler - Parameter edge cases", async (t) => {
 
   await t.test("should handle URL with port number", async () => {
     global.fetch = mockFetch as any;
+    process.env.FEED_SECRET = testSecret;
     const url = "https://example.com:8443/feed.xml";
-    const event = createMockEvent(url);
+    const hash = generateHash(url, testSecret);
+    const event = createMockEvent(url, hash);
     const response = await handler(event);
     global.fetch = originalFetch;
+    delete process.env.FEED_SECRET;
 
     const responseValue = typeof response === "string" ? JSON.parse(response) : response;
     // URL validation should pass
