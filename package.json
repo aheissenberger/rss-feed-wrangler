@@ -5,15 +5,14 @@
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test --test-reporter=spec src/**/*.test.ts",
     "test:watch": "node --watch --experimental-strip-types --test --test-reporter=spec src/**/*.test.ts",
     "test:coverage": "node --experimental-strip-types --test --test-reporter=lcov src/**/*.test.ts > coverage.lcov",
     "local": "FEED_SECRET=\"test-secret\" node --experimental-strip-types src/cli/local-handler.ts",
     "generate-hash": "API_URL=$(aws cloudformation describe-stacks --stack-name RssFeedWranglerStack --query 'Stacks[0].Outputs[?OutputKey==`FeedEndpoint`].OutputValue' --output text 2>/dev/null || echo '') node --env-file-if-exists=.env.local --experimental-strip-types src/cli/generate-hash.ts",
     "cdk": "cdk",
-    "deploy": "npm run build && CDK_DOCKER=0 cdk deploy",
+    "deploy": "npm run typecheck && CDK_DOCKER=0 cdk deploy",
     "synth": "cdk synth",
     "diff": "cdk diff",
     "destroy": "cdk destroy"
