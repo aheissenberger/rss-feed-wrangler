@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "AWS Lambda function to process Atom feeds and split descriptions",
   "type": "module",
-  "main": "lib/index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test --test-reporter=spec src/**/*.test.ts",
@@ -25,7 +24,7 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.159",
-    "@types/node": "^24.10.2",
+    "@types/node": "^24.10.3",
     "@types/xml2js": "^0.4.14",
     "aws-cdk": "^2.1033.0",
     "esbuild": "^0.27.1",
